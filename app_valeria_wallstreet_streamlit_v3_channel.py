@@ -20,7 +20,7 @@ Funciones:
 
 Ejecución:
     pip install streamlit pandas requests
-    streamlit run app_valeria_wallstreet_streamlit.py
+    streamlit run app_valeria_wallstreet_streamlit_v3_channel_mobile_fix.py
 """
 from __future__ import annotations
 
@@ -534,6 +534,22 @@ def apply_filters(df: pd.DataFrame, theme_filter: str, channel_filter: str, date
     return out
 
 
+def render_open_buttons(df: pd.DataFrame, limit: int = 20) -> None:
+    if df.empty:
+        return
+    st.markdown("### 🔗 Abrir directo")
+    st.caption("Si en tu celular la tabla no deja abrir los enlaces, usa estos botones.")
+    preview = df.head(limit).copy()
+    for _, row in preview.iterrows():
+        title = str(row.get("title", "")).strip() or "Video"
+        url = str(row.get("url", "")).strip()
+        if not url:
+            continue
+        col1, col2 = st.columns([5, 1.4])
+        col1.write(title[:110] + ("..." if len(title) > 110 else ""))
+        col2.link_button("Abrir", url, use_container_width=True)
+
+
 def main() -> None:
     st.set_page_config(page_title="Valeria + Wall Street", layout="wide")
     ensure_dirs()
@@ -611,6 +627,7 @@ def main() -> None:
                 use_container_width=True,
                 hide_index=True,
             )
+            render_open_buttons(filtered_df, limit=20)
             st.download_button(
                 "⬇️ Descargar CSV filtrado",
                 data=to_csv_bytes(show_df),
@@ -657,6 +674,12 @@ def main() -> None:
             view_manual = manual_df.copy()
             view_manual["added_at"] = view_manual["added_at"].dt.strftime("%Y-%m-%d %H:%M").fillna("")
             st.dataframe(view_manual, use_container_width=True, hide_index=True)
+            if not view_manual.empty:
+                st.markdown("### 🔗 Abrir links manuales")
+                for _, row in manual_df.head(15).iterrows():
+                    c1, c2 = st.columns([5, 1.4])
+                    c1.write(str(row.get("title", "")).strip() or "Link manual")
+                    c2.link_button("Abrir", str(row.get("url", "")).strip(), use_container_width=True)
             st.download_button(
                 "⬇️ Descargar CSV de links manuales",
                 data=to_csv_bytes(view_manual),
@@ -684,7 +707,7 @@ def main() -> None:
 
     st.markdown("---")
     st.markdown("### 🚀 Cómo ejecutar")
-    st.code("pip install streamlit pandas requests\nstreamlit run app_valeria_wallstreet_streamlit.py", language="bash")
+    st.code("pip install streamlit pandas requests\nstreamlit run app_valeria_wallstreet_streamlit_v3_channel_mobile_fix.py", language="bash")
     if not YOUTUBE_API_KEY:
         st.warning("No detecté YOUTUBE_API_KEY. La búsqueda por canal requiere la API oficial de YouTube para funcionar correctamente.")
 
