@@ -20,7 +20,7 @@ Funciones:
 
 Ejecución:
     pip install streamlit pandas requests
-    streamlit run app_valeria_wallstreet_streamlit_v3_channel_mobile_fix.py
+    streamlit run app_valeria_wallstreet_streamlit_v3_channel_preview.py
 """
 from __future__ import annotations
 
@@ -534,6 +534,48 @@ def apply_filters(df: pd.DataFrame, theme_filter: str, channel_filter: str, date
     return out
 
 
+def extract_video_id(url: str) -> str:
+    if not url:
+        return ""
+    m = re.search(r"[?&]v=([^&]+)", str(url))
+    if m:
+        return m.group(1)
+    m = re.search(r"youtu\.be/([^?&/]+)", str(url))
+    if m:
+        return m.group(1)
+    return ""
+
+def render_video_preview(df: pd.DataFrame) -> None:
+    if df.empty:
+        return
+    preview_df = df.copy().reset_index(drop=True)
+    preview_df["preview_label"] = (
+        preview_df["title"].fillna("Video").astype(str).str.slice(0, 90)
+        + " | "
+        + preview_df["channel_title"].fillna("").astype(str)
+    )
+    st.markdown("## ▶️ Vista previa del video")
+    selected_label = st.selectbox(
+        "Selecciona un video para ver arriba",
+        preview_df["preview_label"].tolist(),
+        index=0,
+    )
+    selected_row = preview_df[preview_df["preview_label"] == selected_label].iloc[0]
+    st.write(f"**Título:** {selected_row.get('title', '')}")
+    if selected_row.get("published_at") is not pd.NaT:
+        try:
+            fecha_txt = pd.to_datetime(selected_row.get("published_at")).strftime("%Y-%m-%d %H:%M")
+            st.write(f"**Fecha:** {fecha_txt}")
+        except Exception:
+            pass
+    st.write(f"**Canal:** {selected_row.get('channel_title', '')}")
+    video_id = extract_video_id(str(selected_row.get("url", "")))
+    if video_id:
+        st.video(f"https://www.youtube.com/watch?v={video_id}")
+    else:
+        st.link_button("Abrir video", str(selected_row.get("url", "")), use_container_width=True)
+
+
 def render_open_buttons(df: pd.DataFrame, limit: int = 20) -> None:
     if df.empty:
         return
@@ -617,6 +659,7 @@ def main() -> None:
         if filtered_df.empty:
             st.info("No hay registros todavía.")
         else:
+            render_video_preview(filtered_df)
             show_df = filtered_df.copy()
             if "published_at" in show_df.columns:
                 show_df["published_at"] = show_df["published_at"].dt.strftime("%Y-%m-%d %H:%M").fillna("")
@@ -707,7 +750,7 @@ def main() -> None:
 
     st.markdown("---")
     st.markdown("### 🚀 Cómo ejecutar")
-    st.code("pip install streamlit pandas requests\nstreamlit run app_valeria_wallstreet_streamlit_v3_channel_mobile_fix.py", language="bash")
+    st.code("pip install streamlit pandas requests\nstreamlit run app_valeria_wallstreet_streamlit_v3_channel_preview.py", language="bash")
     if not YOUTUBE_API_KEY:
         st.warning("No detecté YOUTUBE_API_KEY. La búsqueda por canal requiere la API oficial de YouTube para funcionar correctamente.")
 
