@@ -17,10 +17,11 @@ Funciones:
 - Exportar CSV
 - Generar reporte HTML
 - Ver métricas y ranking de temas
+- Búsquedas reforzadas para el segmento Código Trader
 
 Ejecución:
     pip install streamlit pandas requests
-    streamlit run app_valeria_wallstreet_streamlit_v3_channel_preview.py
+    streamlit run app_valeria_wallstreet_streamlit.py
 """
 from __future__ import annotations
 
@@ -55,6 +56,12 @@ SEARCH_QUERIES = [
     'Valeria Gómez "Cierre de Wall Street" "Negocios TV"',
     '"Cierre de Wall Street" "Valeria Gómez"',
     '"Negocios TV" "Valeria Gómez" Wall Street',
+    '"Código Trader" "Negocios TV"',
+    '"Codigo Trader" "Negocios TV"',
+    '"Código Trader" trader "Negocios TV"',
+    '"Codigo Trader" trader "Negocios TV"',
+    '"Código Trader" Alberto Chan "Negocios TV"',
+    '"Codigo Trader" Alberto Chan "Negocios TV"',
 ]
 
 THEME_KEYWORDS = {
@@ -65,6 +72,7 @@ THEME_KEYWORDS = {
     "Geopolítica": ["iran", "israel", "china", "rusia", "guerra", "geopol"],
     "Bolsas / Índices": ["nasdaq", "s&p", "sp500", "dow", "wall street", "bolsas", "índices", "indices"],
     "Recesión / Macro": ["recesión", "recesion", "empleo", "macro", "pmi", "ipc", "cpi"],
+    "Trading / Código Trader": ["código trader", "codigo trader", "trader", "alberto chan", "riesgo", "setup", "disciplina", "prop firm"],
 }
 
 USER_AGENT = (
@@ -534,70 +542,12 @@ def apply_filters(df: pd.DataFrame, theme_filter: str, channel_filter: str, date
     return out
 
 
-def extract_video_id(url: str) -> str:
-    if not url:
-        return ""
-    m = re.search(r"[?&]v=([^&]+)", str(url))
-    if m:
-        return m.group(1)
-    m = re.search(r"youtu\.be/([^?&/]+)", str(url))
-    if m:
-        return m.group(1)
-    return ""
-
-def render_video_preview(df: pd.DataFrame) -> None:
-    if df.empty:
-        return
-    preview_df = df.copy().reset_index(drop=True)
-    preview_df["preview_label"] = (
-        preview_df["title"].fillna("Video").astype(str).str.slice(0, 90)
-        + " | "
-        + preview_df["channel_title"].fillna("").astype(str)
-    )
-    st.markdown("## ▶️ Vista previa del video")
-    selected_label = st.selectbox(
-        "Selecciona un video para ver arriba",
-        preview_df["preview_label"].tolist(),
-        index=0,
-    )
-    selected_row = preview_df[preview_df["preview_label"] == selected_label].iloc[0]
-    st.write(f"**Título:** {selected_row.get('title', '')}")
-    if selected_row.get("published_at") is not pd.NaT:
-        try:
-            fecha_txt = pd.to_datetime(selected_row.get("published_at")).strftime("%Y-%m-%d %H:%M")
-            st.write(f"**Fecha:** {fecha_txt}")
-        except Exception:
-            pass
-    st.write(f"**Canal:** {selected_row.get('channel_title', '')}")
-    video_id = extract_video_id(str(selected_row.get("url", "")))
-    if video_id:
-        st.video(f"https://www.youtube.com/watch?v={video_id}")
-    else:
-        st.link_button("Abrir video", str(selected_row.get("url", "")), use_container_width=True)
-
-
-def render_open_buttons(df: pd.DataFrame, limit: int = 20) -> None:
-    if df.empty:
-        return
-    st.markdown("### 🔗 Abrir directo")
-    st.caption("Si en tu celular la tabla no deja abrir los enlaces, usa estos botones.")
-    preview = df.head(limit).copy()
-    for _, row in preview.iterrows():
-        title = str(row.get("title", "")).strip() or "Video"
-        url = str(row.get("url", "")).strip()
-        if not url:
-            continue
-        col1, col2 = st.columns([5, 1.4])
-        col1.write(title[:110] + ("..." if len(title) > 110 else ""))
-        col2.link_button("Abrir", url, use_container_width=True)
-
-
 def main() -> None:
     st.set_page_config(page_title="Valeria + Wall Street", layout="wide")
     ensure_dirs()
 
     st.title("📺 Valeria + Wall Street — V3 con búsqueda por canal")
-    st.caption("Monitoreo, base de datos, filtros, reporte HTML, búsquedas por consulta y videos recientes de un canal completo.")
+    st.caption("Monitoreo, base de datos, filtros, reporte HTML, búsquedas por consulta, videos del canal y ahora también resultados de Código Trader.")
 
     with st.sidebar:
         st.header("⚙️ Control")
@@ -659,7 +609,6 @@ def main() -> None:
         if filtered_df.empty:
             st.info("No hay registros todavía.")
         else:
-            render_video_preview(filtered_df)
             show_df = filtered_df.copy()
             if "published_at" in show_df.columns:
                 show_df["published_at"] = show_df["published_at"].dt.strftime("%Y-%m-%d %H:%M").fillna("")
@@ -670,7 +619,6 @@ def main() -> None:
                 use_container_width=True,
                 hide_index=True,
             )
-            render_open_buttons(filtered_df, limit=20)
             st.download_button(
                 "⬇️ Descargar CSV filtrado",
                 data=to_csv_bytes(show_df),
@@ -717,12 +665,6 @@ def main() -> None:
             view_manual = manual_df.copy()
             view_manual["added_at"] = view_manual["added_at"].dt.strftime("%Y-%m-%d %H:%M").fillna("")
             st.dataframe(view_manual, use_container_width=True, hide_index=True)
-            if not view_manual.empty:
-                st.markdown("### 🔗 Abrir links manuales")
-                for _, row in manual_df.head(15).iterrows():
-                    c1, c2 = st.columns([5, 1.4])
-                    c1.write(str(row.get("title", "")).strip() or "Link manual")
-                    c2.link_button("Abrir", str(row.get("url", "")).strip(), use_container_width=True)
             st.download_button(
                 "⬇️ Descargar CSV de links manuales",
                 data=to_csv_bytes(view_manual),
@@ -750,7 +692,7 @@ def main() -> None:
 
     st.markdown("---")
     st.markdown("### 🚀 Cómo ejecutar")
-    st.code("pip install streamlit pandas requests\nstreamlit run app_valeria_wallstreet_streamlit_v3_channel_preview.py", language="bash")
+    st.code("pip install streamlit pandas requests\nstreamlit run app_valeria_wallstreet_streamlit.py", language="bash")
     if not YOUTUBE_API_KEY:
         st.warning("No detecté YOUTUBE_API_KEY. La búsqueda por canal requiere la API oficial de YouTube para funcionar correctamente.")
 
