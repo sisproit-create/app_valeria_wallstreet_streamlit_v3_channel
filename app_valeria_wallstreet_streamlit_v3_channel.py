@@ -17,7 +17,6 @@ Funciones:
 - Exportar CSV
 - Generar reporte HTML
 - Ver métricas y ranking de temas
-- Búsquedas reforzadas para el segmento Código Trader
 
 Ejecución:
     pip install streamlit pandas requests
@@ -56,12 +55,6 @@ SEARCH_QUERIES = [
     'Valeria Gómez "Cierre de Wall Street" "Negocios TV"',
     '"Cierre de Wall Street" "Valeria Gómez"',
     '"Negocios TV" "Valeria Gómez" Wall Street',
-    '"Código Trader" "Negocios TV"',
-    '"Codigo Trader" "Negocios TV"',
-    '"Código Trader" trader "Negocios TV"',
-    '"Codigo Trader" trader "Negocios TV"',
-    '"Código Trader" Alberto Chan "Negocios TV"',
-    '"Codigo Trader" Alberto Chan "Negocios TV"',
 ]
 
 THEME_KEYWORDS = {
@@ -72,7 +65,6 @@ THEME_KEYWORDS = {
     "Geopolítica": ["iran", "israel", "china", "rusia", "guerra", "geopol"],
     "Bolsas / Índices": ["nasdaq", "s&p", "sp500", "dow", "wall street", "bolsas", "índices", "indices"],
     "Recesión / Macro": ["recesión", "recesion", "empleo", "macro", "pmi", "ipc", "cpi"],
-    "Trading / Código Trader": ["código trader", "codigo trader", "trader", "alberto chan", "riesgo", "setup", "disciplina", "prop firm"],
 }
 
 USER_AGENT = (
@@ -542,12 +534,66 @@ def apply_filters(df: pd.DataFrame, theme_filter: str, channel_filter: str, date
     return out
 
 
+
+def extract_video_id(url: str) -> str:
+    import re
+    if not url:
+        return ""
+    m = re.search(r"[?&]v=([^&]+)", str(url))
+    if m:
+        return m.group(1)
+    m = re.search(r"youtu\.be/([^?&/]+)", str(url))
+    if m:
+        return m.group(1)
+    return ""
+
+
+def render_video_preview(df):
+    if df.empty:
+        return
+
+    st.markdown("## ▶️ Vista previa del video")
+
+    opciones = df["title"].fillna("Video").tolist()
+    selected = st.selectbox("Selecciona un video", opciones, key="preview_video_select")
+
+    row = df[df["title"] == selected].iloc[0]
+
+    st.write(f"**Título:** {row['title']}")
+    st.write(f"**Canal:** {row['channel_title']}")
+
+    video_id = extract_video_id(row["url"])
+
+    if video_id:
+        st.video(f"https://www.youtube.com/watch?v={video_id}")
+    else:
+        st.link_button("Abrir video", row["url"], use_container_width=True)
+
+
+def render_open_buttons(df, limit: int = 15):
+    if df.empty:
+        return
+
+    st.markdown("### 🔗 Abrir directo (modo móvil)")
+
+    for _, row in df.head(limit).iterrows():
+        col1, col2 = st.columns([5,1])
+
+        col1.write(row["title"])
+
+        col2.link_button(
+            "Abrir",
+            row["url"],
+            use_container_width=True
+        )
+
+
 def main() -> None:
     st.set_page_config(page_title="Valeria + Wall Street", layout="wide")
     ensure_dirs()
 
     st.title("📺 Valeria + Wall Street — V3 con búsqueda por canal")
-    st.caption("Monitoreo, base de datos, filtros, reporte HTML, búsquedas por consulta, videos del canal y ahora también resultados de Código Trader.")
+    st.caption("Monitoreo, base de datos, filtros, reporte HTML, búsquedas por consulta y videos recientes de un canal completo.")
 
     with st.sidebar:
         st.header("⚙️ Control")
@@ -609,6 +655,7 @@ def main() -> None:
         if filtered_df.empty:
             st.info("No hay registros todavía.")
         else:
+            render_video_preview(filtered_df)
             show_df = filtered_df.copy()
             if "published_at" in show_df.columns:
                 show_df["published_at"] = show_df["published_at"].dt.strftime("%Y-%m-%d %H:%M").fillna("")
@@ -619,6 +666,7 @@ def main() -> None:
                 use_container_width=True,
                 hide_index=True,
             )
+            render_open_buttons(filtered_df, limit=15)
             st.download_button(
                 "⬇️ Descargar CSV filtrado",
                 data=to_csv_bytes(show_df),
